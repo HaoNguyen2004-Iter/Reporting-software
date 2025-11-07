@@ -1,12 +1,8 @@
 using DBContext.Reportly;
 using DBContext.Reportly.Entities;
 using FluentEmail.Core;
-using System;
-using System.IO; 
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore; 
 using FluentEmail.Core.Models;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Service.Reportly.Executes.Emails
 {
@@ -21,9 +17,12 @@ namespace Service.Reportly.Executes.Emails
             _fluentEmail = fluentEmail;
         }
 
-        // model.CreatedBy giờ là UserId (INT)
         public async Task<bool> SendAsync(EmailModels model, string publicPath)
         {
+
+            if (SqlGuard.IsSuspicious(model))
+                throw new Exception("Đầu vào không hợp lệ");
+
             // Bắt đầu Transaction để lưu vào 2 bảng
             using var transaction = await _context.Database.BeginTransactionAsync();
             
@@ -35,7 +34,7 @@ namespace Service.Reportly.Executes.Emails
                 var newUpload = new DBContext.Reportly.Entities.Upload
                 {
                     FileName = model.OriginalFileName ?? "N/A",
-                    FilePath = publicPath, // Đường dẫn public (ví dụ: /media/file_guid.pdf)
+                    FilePath = publicPath, // Đường dẫn public 
                     FileExtension = model.FileExtension ?? ".pdf",
                     FileSizeKB = model.FileSizeKB ?? 0,
                     Status = 1, // 1 = Đã nộp
@@ -76,7 +75,6 @@ namespace Service.Reportly.Executes.Emails
             }
 
             // === BƯỚC 3: GỬI EMAIL ===
-            // (Nằm ngoài transaction, vì nếu gửi mail thất bại, ta vẫn muốn Commit log)
             try
             {
                 if (string.IsNullOrWhiteSpace(model.FilePath))

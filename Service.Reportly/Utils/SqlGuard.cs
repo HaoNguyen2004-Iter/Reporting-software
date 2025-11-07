@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 
+
 public static class SqlGuard
 {
     private static readonly string[] DangerousPatterns = {

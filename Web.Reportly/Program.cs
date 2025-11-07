@@ -89,4 +89,4 @@ app.MapControllerRoute(
 // Các controller có [Route] riêng (ví dụ API)
 app.MapControllers();
 
-app.Run("http://localhost:5001");
+app.Run();
