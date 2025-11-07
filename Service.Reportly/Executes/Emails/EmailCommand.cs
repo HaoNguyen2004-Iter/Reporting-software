@@ -19,11 +19,11 @@ namespace Service.Reportly.Executes.Emails
 
         public async Task<bool> SendAsync(EmailModels model, string publicPath)
         {
+            if (model == null) throw new ArgumentNullException("Email không hợp lệ");
 
             if (SqlGuard.IsSuspicious(model))
                 throw new Exception("Đầu vào không hợp lệ");
 
-            // Bắt đầu Transaction để lưu vào 2 bảng
             using var transaction = await _context.Database.BeginTransactionAsync();
             
             DBContext.Reportly.Entities.Email emailLog;
