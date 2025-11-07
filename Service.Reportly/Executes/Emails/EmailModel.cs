@@ -15,10 +15,21 @@ namespace Service.Reportly.Executes.Emails
         public int Status { get; set; }
         
         // Thông tin file (từ Form)
+        /// <summary>
+        /// Đường dẫn PHYSICAL dùng để đọc file đính kèm khi gửi mail (ví dụ: c:\\app\\wwwroot\\media\\upload\\...)
+        /// </summary>
         public string? FilePath { get; set; }
+        /// <summary>
+        /// Đường dẫn PUBLIC lưu trong database (ví dụ: /media/upload/2025/11/07/file.pdf)
+        /// </summary>
+        public string? PublicFilePath { get; set; }
         public string? OriginalFileName { get; set; }
         public string? FileExtension { get; set; }
         public int? FileSizeKB { get; set; }
+        /// <summary>
+        /// Id bản ghi Upload (nếu có), để liên kết vào EmailLogs.UploadId
+        /// </summary>
+        public int? UploadId { get; set; }
         
         public DateTime? CreatedAt { get; set; }
         public int CreatedBy { get; set; }   

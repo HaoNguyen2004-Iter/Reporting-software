@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using DBContext.Reportly;
+using DBContext.Reportly.Entities;
 using Microsoft.Extensions.Hosting;
 using Service.Reportly.Model;
 
@@ -164,6 +165,20 @@ namespace Service.Reportly.Executes.Uploads
             if (meta.ChunkIndex == meta.TotalChunks - 1)
             {
                 var file = await MergeAllChunks(uploadId, meta.OriginalFileName, meta.TotalChunks, meta.TotalSizeBytes, fileExt);
+                    // Persist upload to database (chỉ lưu khi đã hoàn tất)
+                    var entity = new Upload
+                    {
+                        FileName = file.FileName,
+                        FilePath = file.FilePath, // public path
+                        FileExtension = file.FileExtension,
+                        FileSizeKB = file.FileSizeKB,
+                        Status = file.Status,
+                        CreateAt = file.CreateAt,
+                        CreateBy = file.CreateBy
+                    };
+                    _db.Uploads.Add(entity);
+                    await _db.SaveChangesAsync();
+                    file.Id = entity.Id; // cập nhật Id trả về
                 return new UploadChunkResult { Completed = true, UploadId = uploadId, File = file };
             }
 
@@ -212,5 +227,41 @@ namespace Service.Reportly.Executes.Uploads
         }
 
         #endregion
+
+        /// <summary>
+        /// Tạo bản ghi Upload trực tiếp (dùng khi gửi email mà file đã tồn tại sẵn, không qua chunk API).
+        /// </summary>
+        public async Task<UploadModel> CreateUploadAsync(string originalFileName, string publicFilePath, string fileExtension, int fileSizeKb, int createdBy)
+        {
+            if (string.IsNullOrWhiteSpace(originalFileName)) throw new ArgumentException("Tên file không hợp lệ", nameof(originalFileName));
+            if (string.IsNullOrWhiteSpace(publicFilePath)) throw new ArgumentException("Đường dẫn public không hợp lệ", nameof(publicFilePath));
+            if (string.IsNullOrWhiteSpace(fileExtension)) fileExtension = ".dat";
+
+            var model = new UploadModel
+            {
+                FileName = originalFileName,
+                FilePath = publicFilePath,
+                FileExtension = fileExtension,
+                FileSizeKB = fileSizeKb,
+                Status = 1,
+                CreateAt = DateTime.UtcNow,
+                CreateBy = createdBy
+            };
+
+            var entity = new Upload
+            {
+                FileName = model.FileName,
+                FilePath = model.FilePath,
+                FileExtension = model.FileExtension,
+                FileSizeKB = model.FileSizeKB,
+                Status = model.Status,
+                CreateAt = model.CreateAt,
+                CreateBy = model.CreateBy
+            };
+            _db.Uploads.Add(entity);
+            await _db.SaveChangesAsync();
+            model.Id = entity.Id;
+            return model;
+        }
     }
 }

@@ -87,7 +87,7 @@ namespace Reportly.Controllers
 
 
         [HttpPost("send")]
-        public async Task<IActionResult> SendEmail([FromForm] EmailModels model)
+    public async Task<IActionResult> SendEmail([FromForm] EmailModels model)
         {
            
             //Kiểm tra UserId từ Session
@@ -99,7 +99,6 @@ namespace Reportly.Controllers
             
             // Ghi đè CreatedBy bằng ID (int) từ Session (Bảo mật)
             model.CreatedBy = userId.Value;
-
          
             model.SenderName = HttpContext.Session.GetString("FullName") ?? "Không rõ";
             model.SenderDepartment = HttpContext.Session.GetString("DepartmentName") ?? "Không rõ";
@@ -113,7 +112,6 @@ namespace Reportly.Controllers
 
                 // Chuyển public path -> physical path
                 var publicPath = model.FilePath; // Lưu lại đường dẫn public
-                
                 var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", model.FilePath.Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar));
 
                 if (!System.IO.File.Exists(physicalPath))
@@ -122,10 +120,22 @@ namespace Reportly.Controllers
                     return BadRequest(new { message = "File không tồn tại!" });
                 }
 
-                model.FilePath = physicalPath; // Gán Physical path cho EmailCommand
+                // Tạo bản ghi Upload trước (chỉ khi có file)
+                model.PublicFilePath = publicPath;
+                model.FilePath = physicalPath; // physical for sending
 
-                // Truyền publicPath (để lưu vào DB)
-                var success = await _emailCommand.SendAsync(model, publicPath); 
+                if (!string.IsNullOrWhiteSpace(publicPath))
+                {
+                    var fileSizeBytes = new FileInfo(physicalPath).Length;
+                    var fileSizeKb = (int)Math.Ceiling(fileSizeBytes / 1024.0);
+                    var ext = model.FileExtension ?? Path.GetExtension(model.OriginalFileName ?? physicalPath) ?? ".pdf";
+                    var upload = await _uploadCommand.CreateUploadAsync(model.OriginalFileName ?? "N/A", publicPath, ext, fileSizeKb, model.CreatedBy);
+                    model.UploadId = upload.Id;
+                    model.FileExtension = ext;
+                    model.FileSizeKB = fileSizeKb;
+                }
+
+                var success = await _emailCommand.SendAsync(model); 
 
                 return success
                     ? Ok(new { message = "Gửi email thành công!" })
