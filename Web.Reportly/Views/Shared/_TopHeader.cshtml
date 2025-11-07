@@ -1,0 +1,32 @@
+<header class="top-header">
+    <button class="btn-toggle-sidebar" id="toggleSidebar">
+        <i class="fas fa-bars"></i>
+    </button>
+    
+    <div class="header-title">
+        <h4>@ViewData["PageTitle"]</h4>
+        <p class="text-muted mb-0">@ViewData["PageSubtitle"]</p>
+    </div>
+    
+    <div class="header-actions">
+        <button class="btn-icon" title="Thông báo">
+            <i class="fas fa-bell"></i>
+            <span class="badge">3</span>
+        </button>
+        <button class="btn-icon" title="Tin nhắn">
+            <i class="fas fa-envelope"></i>
+        </button>
+        <div class="dropdown">
+            <button class="btn-profile" data-bs-toggle="dropdown">
+                <i class="fas fa-user-circle"></i>
+                <i class="fas fa-chevron-down ms-2"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Hồ sơ</a></li>
+                <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Cài đặt</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item"asp-controller="Account" asp-action="Logout"><i class="fas fa-sign-out-alt me-2"></i>Đăng xuất</a></li>
+            </ul>
+        </div>
+    </div>
+</header>

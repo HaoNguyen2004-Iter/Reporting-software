@@ -1,0 +1,116 @@
+@{
+    ViewData["Title"] = "Đăng nhập";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-5 col-lg-4">
+                <div class="card" style="border: none; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); overflow: hidden;">
+                    
+                    <!-- Header -->
+                    <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: 40px 20px; text-align: center;">
+                        <div style="background: white; width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                            <i class="fas fa-chart-line" style="font-size: 35px; color: #667eea;"></i>
+                        </div>
+                        <h3 style="color: white; font-weight: 600; margin: 0; font-size: 28px;">Reportly</h3>
+                        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">Đăng nhập vào hệ thống</p>
+                    </div>
+                    
+                    <!-- Body -->
+                    <div class="card-body" style="padding: 40px 30px;">
+                        @if (TempData["Error"] != null)
+                        {
+                            <div class="alert alert-danger" style="border-radius: 10px; border: none; background: #fee; color: #c33;">
+                                <i class="fas fa-exclamation-circle"></i> @TempData["Error"]
+                            </div>
+                        }
+
+                        <form method="post" asp-action="Login">
+                            <!-- Email -->
+                            <div class="form-group mb-4">
+                                <label for="email" style="color: #555; font-weight: 500; margin-bottom: 8px; font-size: 14px;">
+                                    <i class="fas fa-envelope" style="color: #667eea; margin-right: 5px;"></i> Email
+                                </label>
+                                <input type="email" 
+                                       class="form-control" 
+                                       id="email" 
+                                       name="email" 
+                                       placeholder="example@company.com"
+                                       required 
+                                       style="border: 2px solid #e0e0e0; border-radius: 10px; padding: 12px 15px; font-size: 14px; transition: all 0.3s;"
+                                       onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 0.2rem rgba(102,126,234,0.15)'"
+                                       onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'" />
+                            </div>
+
+                            <!-- Password -->
+                            <div class="form-group mb-4">
+                                <label for="password" style="color: #555; font-weight: 500; margin-bottom: 8px; font-size: 14px;">
+                                    <i class="fas fa-lock" style="color: #667eea; margin-right: 5px;"></i> Mật khẩu
+                                </label>
+                                <input type="password" 
+                                       class="form-control" 
+                                       id="password" 
+                                       name="password" 
+                                       placeholder="••••••••"
+                                       required 
+                                       style="border: 2px solid #e0e0e0; border-radius: 10px; padding: 12px 15px; font-size: 14px; transition: all 0.3s;"
+                                       onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 0.2rem rgba(102,126,234,0.15)'"
+                                       onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'" />
+                            </div>
+
+                            <!-- Remember & Forgot -->
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="remember" style="border-color: #667eea;">
+                                    <label class="form-check-label" for="remember" style="color: #666; font-size: 13px;">
+                                        Ghi nhớ đăng nhập
+                                    </label>
+                                </div>
+                                <a href="#" style="color: #667eea; text-decoration: none; font-size: 13px; font-weight: 500;">Quên mật khẩu?</a>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <button type="submit" 
+                                    class="btn w-100" 
+                                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                           color: white; 
+                                           border: none; 
+                                           border-radius: 10px; 
+                                           padding: 14px; 
+                                           font-weight: 600; 
+                                           font-size: 16px;
+                                           box-shadow: 0 4px 15px rgba(102,126,234,0.3);
+                                           transition: all 0.3s;"
+                                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102,126,234,0.4)'"
+                                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102,126,234,0.3)'">
+                                <i class="fas fa-sign-in-alt"></i> Đăng nhập
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Footer -->
+                    <div style="text-align: center; padding: 20px; background: #f8f9fa; border-top: 1px solid #e0e0e0;">
+                        <p style="margin: 0; color: #888; font-size: 13px;">
+                            © 2025 Reportly System.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

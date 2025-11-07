@@ -1,0 +1,18 @@
+/* Compiled CSS (simple, from report.scss) */
+.report-container{
+  border-radius:18px;
+  border:1px solid #34495e;
+  background: #fff;
+}
+
+#editor{
+  min-height:280px;
+}
+
+#pdfArea{
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.form-control-sm{
+  border-radius:8px;
+}

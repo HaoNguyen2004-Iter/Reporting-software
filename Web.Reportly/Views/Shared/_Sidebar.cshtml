@@ -1,0 +1,51 @@
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <div class="brand">
+            <i class="fas fa-building"></i>
+            <div class="brand-text">
+                <h5>Công ty ABC</h5>
+                <small>Hệ thống báo cáo</small>
+            </div>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <a asp-controller="Home" asp-action="Index" class="nav-item">
+            <i class="fas fa-home"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="#" class="nav-item">
+            <i class="fas fa-chart-line"></i>
+            <span>Thống kê</span>
+        </a>
+        <a asp-controller="Report" asp-action="Write" class="nav-item">
+            <i class="fas fa-file-alt"></i>
+            <span>Viết báo cáo</span>
+        </a>
+        <a asp-controller="Report" asp-action="Submit" class="nav-item">
+            <i class="fas fa-paper-plane"></i>
+            <span>Nộp báo cáo</span>
+        </a>
+        <!-- SỬA: Cập nhật link Lịch sử -->
+        <a asp-controller="Report" asp-action="History" class="nav-item">
+            <i class="fas fa-history"></i>
+            <span>Lịch sử báo cáo</span>
+        </a>
+        <a href="#" class="nav-item">
+            <i class="fas fa-cog"></i>
+            <span>Cài đặt</span>
+        </a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="user-info">
+            <div class="avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="user-details">
+                <div class="user-name">Nhân viên ABC</div>
+                <div class="user-role">Phòng IT</div>
+            </div>
+        </div>
+    </div>
+</div>
