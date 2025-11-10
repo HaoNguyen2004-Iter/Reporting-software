@@ -1,8 +1,13 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using DBContext.Reportly;
 using DBContext.Reportly.Entities;
 using FluentEmail.Core;
 using FluentEmail.Core.Models;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 
 namespace Service.Reportly.Executes.Emails
 {
@@ -10,107 +15,121 @@ namespace Service.Reportly.Executes.Emails
     {
         private readonly AppDBContext _context;
         private readonly IFluentEmail _fluentEmail;
+        private readonly IHostEnvironment _env; 
 
-        public EmailCommand(AppDBContext context, IFluentEmail fluentEmail)
+        public EmailCommand(AppDBContext context, IFluentEmail fluentEmail, IHostEnvironment env)
         {
             _context = context;
             _fluentEmail = fluentEmail;
+            _env = env;
         }
 
         public async Task<bool> SendAsync(EmailModels model)
         {
-            if (model == null) throw new ArgumentNullException("Email không hợp lệ");
+            if (model == null) throw new ArgumentNullException(nameof(model));
+            if (SqlGuard.IsSuspicious(model)) throw new InvalidOperationException("Phát hiện dữ liệu đầu vào không an toàn.");
 
-            if (SqlGuard.IsSuspicious(model))
-                throw new Exception("Đầu vào không hợp lệ");
-            // Tạo email log trước, trạng thái mặc định = 0 (chưa gửi/thất bại)
+            // 1. Tạo Log trước (trạng thái Pending = 0)
+          
             var emailLog = new DBContext.Reportly.Entities.Email
             {
                 ToEmail = model.ToEmail,
                 CCEmail = model.CCEmail,
                 Subject = model.Subject,
                 Content = model.Content,
-                Status = 0,
-                FilePath = model.PublicFilePath, // lưu đường dẫn public (nếu có)
-                OriginalFileName = model.OriginalFileName,
+                Status = 0, 
+                UploadId = model.UploadId, // Chỉ lưu UploadId làm tham chiếu
                 CreatedAt = DateTime.Now,
                 CreatedBy = model.CreatedBy,
-                UploadId = model.UploadId,
                 SenderName = model.SenderName,
                 SenderDepartment = model.SenderDepartment
             };
+
             _context.EmailLogs.Add(emailLog);
             await _context.SaveChangesAsync();
 
-            // Gửi email và cập nhật trạng thái (không rollback bản ghi log)
             try
             {
-                if (string.IsNullOrWhiteSpace(model.FilePath))
-                     throw new ArgumentException("Physical FilePath is null or empty");
-
-                var content = string.IsNullOrWhiteSpace(model.Content) ? "<p>Nội dung trống</p>" : model.Content;
-                
-                var email = _fluentEmail
+                var emailBuilder = _fluentEmail
                     .To(model.ToEmail)
                     .Subject(model.Subject)
-                    .Body(content, true);
+                    .Body(string.IsNullOrWhiteSpace(model.Content) ? "<p>...</p>" : model.Content, true);
 
                 if (!string.IsNullOrWhiteSpace(model.CCEmail))
                 {
-                    var ccEmails = model.CCEmail
-                        .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(e => e.Trim())
-                        .Where(e => !string.IsNullOrWhiteSpace(e))
-                        .ToArray();
-                    
-                    if (ccEmails.Length > 0)
+                    foreach (var cc in model.CCEmail.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
                     {
+                        emailBuilder.CC(cc.Trim());
+                    }
+                }
+
+                // 2. Xử lý file đính kèm dựa trên UploadId (Single Source of Truth)
+                if (model.UploadId.HasValue)
+                {
+                    var upload = await _context.Uploads.FindAsync(model.UploadId.Value);
+                    if (upload != null)
+                    {
+                        // Convert Public Path (DB) -> Physical Path (Server)
+                        var physicalPath = GetPhysicalPath(upload.FilePath);
                         
-                        foreach (var ccEmail in ccEmails)
+                        if (File.Exists(physicalPath))
                         {
-                            email.CC(ccEmail);
+                            var fileBytes = await File.ReadAllBytesAsync(physicalPath);
+                            emailBuilder.Attach(new Attachment
+                            {
+                                Data = new MemoryStream(fileBytes),
+                                Filename = upload.FileName, // Lấy tên gốc từ DB Uploads
+                                ContentType = GetContentType(upload.FileExtension) // Hàm helper xác định loại file
+                            });
+                        }
+                        else
+                        {
+                            // File trong DB có nhưng ổ cứng không thấy -> Log cảnh báo
+                            emailLog.Content += $"\n[Warning]: Không tìm thấy file vật lý tại {physicalPath}";
                         }
                     }
                 }
 
-                // Đọc file từ Physical Path
-                var fileBytes = await System.IO.File.ReadAllBytesAsync(model.FilePath);
-                // Đặt tên file đính kèm là Tên file gốc
-                var fileNameForAttachment = model.OriginalFileName ?? System.IO.Path.GetFileName(model.FilePath);
+                // 3. Gửi và cập nhật trạng thái
+                var response = await emailBuilder.SendAsync();
+                emailLog.Status = response.Successful ? 1 : 0; // 1: Success, 0: Failed
                 
-                email.Attach(new Attachment
+                if (!response.Successful)
                 {
-                    Data = new System.IO.MemoryStream(fileBytes),
-                    Filename = fileNameForAttachment,
-                    ContentType = "application/pdf" 
-                });
-
-                var result = await email.SendAsync();
-
-                if (result.Successful)
-                {
-                    emailLog.Status = 1;
-                    await _context.SaveChangesAsync();
-                    return true;
+                    emailLog.Content += $"\n[Error]: {string.Join("; ", response.ErrorMessages)}";
                 }
-                else
-                {
-                    var errorMessages = string.Join("; ", result.ErrorMessages);
-                    emailLog.Status = 0;
-                    emailLog.Content += $"\n[Lỗi gửi mail]: {errorMessages}";
-                    await _context.SaveChangesAsync();
-                    throw new Exception($"Gửi email thất bại: {errorMessages}");
-                }
+
+                await _context.SaveChangesAsync();
+                return response.Successful;
             }
             catch (Exception ex)
             {
-                // Cập nhật log với thông tin lỗi Exception (nếu chưa có)
-                emailLog.Status = 0;
-                emailLog.Content += $"\n[Lỗi Exception]: {ex.Message}";
+                emailLog.Status = 2; // Failed
+                emailLog.Content += $"\n[Exception]: {ex.Message}";
                 await _context.SaveChangesAsync();
-                if (ex.Message.StartsWith("Gửi email thất bại")) throw;
-                throw new Exception($"Lỗi khi xử lý email: {ex.Message}", ex);
+                throw; // Ném tiếp lỗi để Controller biết
             }
+        }
+
+        // Helpers
+        private string GetPhysicalPath(string publicPath)
+        {
+            var webRoot = Path.Combine(_env.ContentRootPath, "wwwroot");
+            return Path.Combine(webRoot, publicPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+        }
+
+        private string GetContentType(string ext)
+        {
+            return ext?.ToLowerInvariant() switch
+            {
+                ".pdf" => "application/pdf",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".doc" => "application/msword",
+                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".xls" or ".xlsx" => "application/vnd.ms-excel",
+                _ => "application/octet-stream"
+            };
         }
     }
 }

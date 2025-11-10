@@ -1,3 +1,6 @@
+@using Microsoft.AspNetCore.Http
+@inject IHttpContextAccessor HttpContextAccessor
+
 <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
         <div class="brand">
@@ -14,25 +17,36 @@
             <i class="fas fa-home"></i>
             <span>Dashboard</span>
         </a>
-        <a href="#" class="nav-item">
-            <i class="fas fa-chart-line"></i>
-            <span>Thống kê</span>
-        </a>
         <a asp-controller="Report" asp-action="Write" class="nav-item">
-            <i class="fas fa-file-alt"></i>
+            <i class="fas fa-file-pen"></i>
             <span>Viết báo cáo</span>
         </a>
         <a asp-controller="Report" asp-action="Submit" class="nav-item">
-            <i class="fas fa-paper-plane"></i>
+            <i class="fas fa-envelope"></i>
             <span>Nộp báo cáo</span>
         </a>
-        <!-- SỬA: Cập nhật link Lịch sử -->
+        
+        <div class="nav-group-divider">QUẢN LÝ</div>
+
+        <a asp-controller="Report" asp-action="Drafts" class="nav-item">
+            <i class="fas fa-file-lines"></i>
+            <span>Báo cáo nháp</span>
+        </a>
+
+        
         <a asp-controller="Report" asp-action="History" class="nav-item">
-            <i class="fas fa-history"></i>
-            <span>Lịch sử báo cáo</span>
+            <i class="fas fa-clock-rotate-left"></i>
+            <span>Lịch sử đã nộp</span>
+        </a>
+
+        <div class="nav-group-divider">HỆ THỐNG</div>
+
+        <a href="#" class="nav-item">
+            <i class="fas fa-chart-pie"></i>
+            <span>Thống kê</span>
         </a>
         <a href="#" class="nav-item">
-            <i class="fas fa-cog"></i>
+            <i class="fas fa-gear"></i>
             <span>Cài đặt</span>
         </a>
     </nav>
@@ -43,8 +57,12 @@
                 <i class="fas fa-user"></i>
             </div>
             <div class="user-details">
-                <div class="user-name">Nhân viên ABC</div>
-                <div class="user-role">Phòng IT</div>
+                <div class="user-name">
+                    @(HttpContextAccessor.HttpContext?.Session?.GetString("FullName") ?? "Khách")
+                </div>
+                <div class="user-role">
+                    @(HttpContextAccessor.HttpContext?.Session?.GetString("DepartmentName") ?? "Chưa đăng nhập")
+                </div>
             </div>
         </div>
     </div>

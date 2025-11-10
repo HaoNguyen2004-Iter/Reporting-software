@@ -17,8 +17,7 @@ namespace Service.Reportly.Executes.Uploads
 
         private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            ".jpg", ".jpeg", ".png",
-            ".pdf"
+            ".jpg", ".jpeg", ".png", ".pdf"
         };
 
         private readonly AppDBContext _db;
@@ -28,240 +27,135 @@ namespace Service.Reportly.Executes.Uploads
         {
             _db = db;
             _env = env;
-            Directory.CreateDirectory(WebRootPath);
-            Directory.CreateDirectory(TempUploadFolder);
+            // Tạo thư mục nếu chưa có
+            if (!Directory.Exists(WebRootPath)) Directory.CreateDirectory(WebRootPath);
+            if (!Directory.Exists(TempUploadFolder)) Directory.CreateDirectory(TempUploadFolder);
         }
 
-        /// <summary>
-        /// Upload 1 chunk → nếu là chunk cuối thì tự động ghép file.
-        /// Toàn bộ logic luồng chính được tích hợp tại đây bằng Local Functions.
-        /// </summary>
         public async Task<UploadChunkResult> UploadChunkAsync(ChunkRequest meta, Stream chunkStream)
         {
-           
-            // 1. Gộp ValidateMeta, ValidateStream và GetOrCreateUploadId
+            // Validate & Get ID
             (string uploadId, string fileExt) ValidateRequestAndGetId()
             {
                 if (meta == null) throw new ArgumentNullException(nameof(meta));
-                if (chunkStream == null) throw new ArgumentNullException(nameof(chunkStream));
                 if (string.IsNullOrWhiteSpace(meta.OriginalFileName)) throw new ArgumentException("Tên file không được để trống");
-                if (meta.ChunkIndex < 0) throw new ArgumentOutOfRangeException(nameof(meta.ChunkIndex));
-                if (meta.TotalChunks <= 0) throw new ArgumentOutOfRangeException(nameof(meta.TotalChunks));
-                if (meta.ChunkIndex >= meta.TotalChunks) throw new ArgumentException("ChunkIndex phải nhỏ hơn TotalChunks");
+                if (meta.ChunkIndex < 0 || meta.TotalChunks <= 0 || meta.ChunkIndex >= meta.TotalChunks)
+                     throw new ArgumentOutOfRangeException("ChunkIndex hoặc TotalChunks không hợp lệ");
 
-                var safeName = Path.GetFileName(meta.OriginalFileName);
-                var ext = Path.GetExtension(safeName).ToLowerInvariant();
-
-                // Kiểm tra Extension 
+                var ext = Path.GetExtension(meta.OriginalFileName).ToLowerInvariant();
                 if (string.IsNullOrEmpty(ext) || !AllowedExtensions.Contains(ext))
                 {
-                    var list = string.Join(", ", AllowedExtensions.OrderBy(e => e));
-                    throw new ArgumentException($"Chỉ hỗ trợ: {list}", nameof(ext));
+                    throw new ArgumentException($"Định dạng file không được hỗ trợ: {ext}");
                 }
 
-                // Tạo mã cho chunk
-                var id = string.IsNullOrWhiteSpace(meta.UploadId)
-                    ? Guid.NewGuid().ToString("N")
-                    : meta.UploadId.Trim().Replace("\"", "");
-
+                var id = string.IsNullOrWhiteSpace(meta.UploadId) ? Guid.NewGuid().ToString("N") : meta.UploadId.Trim();
                 return (id, ext);
             }
 
-            // 2. Gộp SaveChunkToTemp
-            async Task SaveChunk(string uploadId, int chunkIndex)
-            {
-                var tempPath = Path.Combine(TempUploadFolder, $"{uploadId}_{chunkIndex}.chunk");
-                long totalRead = 0;
-
-                using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
-                {
-                    var buffer = new byte[81920];
-                    int bytesRead;
-
-                    while ((bytesRead = await chunkStream.ReadAsync(buffer.AsMemory(0, buffer.Length))) > 0)
-                    {
-                        totalRead += bytesRead;
-                        if (totalRead > MaxChunkSize)
-                        {
-                            TryDeleteFile(tempPath);
-                            throw new InvalidOperationException($"Chunk vượt quá {MaxChunkSize / 1024}KB");
-                        }
-                        await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
-                    }
-                }
-            }
-
-            // 3. Gộp MergeAllChunks và ValidateAllChunks
+            //Merge
             async Task<UploadModel> MergeAllChunks(string uploadId, string originalName, int expectedChunks, long? expectedTotalSize, string ext)
             {
-                // Logic Validate All Chunks
-                long total = 0;
-                int actualChunkCount = 0;
-                for (actualChunkCount = 0; ; actualChunkCount++)
+                long totalSize = 0;
+                // Validate đủ số lượng chunk trước khi ghép
+                for (int i = 0; i < expectedChunks; i++)
                 {
-                    if (expectedChunks > 0 && actualChunkCount >= expectedChunks) break;
-                    var chunkPath = Path.Combine(TempUploadFolder, $"{uploadId}_{actualChunkCount}.chunk");
-
-                    if (!File.Exists(chunkPath))
-                    {
-                        if (expectedChunks > 0) throw new FileNotFoundException($"Thiếu chunk: {actualChunkCount}");
-                        break;
-                    }
-
-                    var size = new FileInfo(chunkPath).Length;
-                    total += size;
-                    if (total > MaxTotalFileSize)
-                        throw new InvalidOperationException($"Tổng dung lượng vượt quá {MaxTotalFileSize / 1024 / 1024}MB");
+                    var chunkPath = Path.Combine(TempUploadFolder, $"{uploadId}_{i}.chunk");
+                    if (!File.Exists(chunkPath)) throw new FileNotFoundException($"Thiếu chunk thứ {i}");
+                    totalSize += new FileInfo(chunkPath).Length;
                 }
 
-                if (expectedChunks > 0 && actualChunkCount != expectedChunks)
-                    throw new InvalidOperationException($"Số chunk thực tế ({actualChunkCount}) không khớp với yêu cầu ({expectedChunks})");
+                if (totalSize > MaxTotalFileSize) throw new InvalidOperationException("Tổng dung lượng file vượt quá giới hạn cho phép");
+                if (expectedTotalSize.HasValue && totalSize > expectedTotalSize.Value) throw new InvalidOperationException("Dung lượng thực tế không khớp với khai báo ban đầu");
 
-                // Kiểm tra tổng kích thước 
-                if (expectedTotalSize.HasValue && total > expectedTotalSize.Value)
-                    throw new InvalidOperationException($"Dung lượng thực tế ({total}) vượt quá khai báo ({expectedTotalSize})");
-
-                // Logic Save Merged File 
+                // Bắt đầu ghép
                 var safeName = Path.GetFileName(originalName);
-                var publicFolder = CreateDateFolder("/media/upload");
-                var baseName = Path.GetFileNameWithoutExtension(safeName);
-                var sanitized = SanitizeFileName(baseName);
-                if (string.IsNullOrWhiteSpace(sanitized)) sanitized = "file";
-
-                var finalFileName = $"{sanitized}_{uploadId}{ext}";
-                var publicFilePath = $"{publicFolder}/{finalFileName}";
+                var relativeFolder = CreateDateFolder("/media/upload");
+                var finalFileName = $"{Path.GetFileNameWithoutExtension(safeName)}_{uploadId}{ext}";
+                var publicFilePath = $"{relativeFolder}/{finalFileName}";
                 var physicalPath = GetPhysicalPath(publicFilePath);
 
-                Directory.CreateDirectory(Path.GetDirectoryName(physicalPath)!);
-
-                using (var output = new FileStream(physicalPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
+                using (var output = new FileStream(physicalPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 {
-                    for (int i = 0; i < actualChunkCount; i++)
+                    for (int i = 0; i < expectedChunks; i++)
                     {
                         var chunkPath = Path.Combine(TempUploadFolder, $"{uploadId}_{i}.chunk");
                         using var input = File.OpenRead(chunkPath);
                         await input.CopyToAsync(output);
-                        TryDeleteFile(chunkPath); // Xóa chunk sau khi ghép
+                        try { File.Delete(chunkPath); } catch {  }
                     }
                 }
-
-                var fileInfo = new FileInfo(GetPhysicalPath(publicFilePath));
 
                 return new UploadModel
                 {
                     FileName = safeName,
-                    FilePath = publicFilePath,
+                    FilePath = publicFilePath, 
                     FileExtension = ext,
-                    FileSizeKB = (int)Math.Ceiling(fileInfo.Length / 1024.0),
+                    FileSizeKB = (int)(totalSize / 1024),
                     Status = 1,
-                    CreateAt = DateTime.UtcNow,
-                    CreateBy = 0
+                    CreatedAt = DateTime.Now,
+                    CreatedBy = 0 
                 };
             }
 
-            var (uploadId, fileExt) = ValidateRequestAndGetId();
-            await SaveChunk(uploadId, meta.ChunkIndex);
+            // --- Main Execution Flow ---
+            var (uId, fExt) = ValidateRequestAndGetId();
 
-            if (meta.ChunkIndex == meta.TotalChunks - 1)
+            // Lưu chunk hiện tại
+            var currentChunkPath = Path.Combine(TempUploadFolder, $"{uId}_{meta.ChunkIndex}.chunk");
+            using (var fs = new FileStream(currentChunkPath, FileMode.Create))
             {
-                var file = await MergeAllChunks(uploadId, meta.OriginalFileName, meta.TotalChunks, meta.TotalSizeBytes, fileExt);
-                    // Persist upload to database (chỉ lưu khi đã hoàn tất)
-                    var entity = new Upload
-                    {
-                        FileName = file.FileName,
-                        FilePath = file.FilePath, // public path
-                        FileExtension = file.FileExtension,
-                        FileSizeKB = file.FileSizeKB,
-                        Status = file.Status,
-                        CreateAt = file.CreateAt,
-                        CreateBy = file.CreateBy
-                    };
-                    _db.Uploads.Add(entity);
-                    await _db.SaveChangesAsync();
-                    file.Id = entity.Id; // cập nhật Id trả về
-                return new UploadChunkResult { Completed = true, UploadId = uploadId, File = file };
+                await chunkStream.CopyToAsync(fs);
+            }
+            
+            // Kiểm tra kích thước chunk vừa upload
+            if (new FileInfo(currentChunkPath).Length > MaxChunkSize)
+            {
+                File.Delete(currentChunkPath);
+                throw new InvalidOperationException($"Chunk vượt quá giới hạn {MaxChunkSize / 1024}KB");
             }
 
-            return new UploadChunkResult { Completed = false, UploadId = uploadId };
+            // Nếu là chunk cuối thì tiến hành ghép
+            if (meta.ChunkIndex == meta.TotalChunks - 1)
+            {
+                var fileModel = await MergeAllChunks(uId, meta.OriginalFileName, meta.TotalChunks, meta.TotalSizeBytes, fExt);
+
+                
+                var entity = new Upload
+                {
+                    FileName = fileModel.FileName,
+                    FilePath = fileModel.FilePath,
+                    FileExtension = fileModel.FileExtension,
+                    FileSizeKB = fileModel.FileSizeKB,
+                    Status = fileModel.Status,
+                    CreatedAt = fileModel.CreatedAt,
+                    CreatedBy = fileModel.CreatedBy
+                };
+                _db.Uploads.Add(entity);
+                await _db.SaveChangesAsync();
+                
+                fileModel.Id = entity.Id;
+                return new UploadChunkResult { Completed = true, UploadId = uId, File = fileModel };
+            }
+
+            return new UploadChunkResult { Completed = false, UploadId = uId };
         }
 
-        #region Helper
-
-        private static string SanitizeFileName(string name)
+        // Helper
+        private string WebRootPath => Path.Combine(_env.ContentRootPath, "wwwroot");
+        private string TempUploadFolder => Path.Combine(WebRootPath, "content", "temp_upload");
+        
+        private string GetPhysicalPath(string publicPath)
         {
-            var invalid = Path.GetInvalidFileNameChars();
-            var cleaned = new string(name.Where(ch => !invalid.Contains(ch)).ToArray());
-            cleaned = string.Join("_", cleaned.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries));
-            return cleaned.Length > 64 ? cleaned[..64] : cleaned;
+             return Path.Combine(WebRootPath, publicPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
         }
 
         private string CreateDateFolder(string basePath)
         {
             var now = DateTime.Now;
-            var path = basePath.TrimEnd('/');
-
-            var relativePath = Path.Combine(now.Year.ToString(), now.Month.ToString("D2"), now.Day.ToString("D2"));
-            var finalPublicPath = $"{path}/{relativePath.Replace(Path.DirectorySeparatorChar, '/')}";
-            var fullPath = GetPhysicalPath(finalPublicPath);
-
-            Directory.CreateDirectory(fullPath);
-
-            return finalPublicPath;
-        }
-
-        private static void TryDeleteFile(string path)
-        {
-            try { File.Delete(path); }
-            catch { }
-        }
-
-        private string WebRootPath => Path.Combine(_env.ContentRootPath ?? AppContext.BaseDirectory, "wwwroot");
-
-        private string TempUploadFolder => Path.Combine(WebRootPath, "content", "temp_upload");
-
-        private string GetPhysicalPath(string publicPath)
-        {
-            if (string.IsNullOrEmpty(publicPath)) return WebRootPath;
-            var clean = publicPath.TrimStart('/');
-            return Path.Combine(WebRootPath, clean.Replace('/', Path.DirectorySeparatorChar));
-        }
-
-        #endregion
-
-        /// <summary>
-        /// Tạo bản ghi Upload trực tiếp (dùng khi gửi email mà file đã tồn tại sẵn, không qua chunk API).
-        /// </summary>
-        public async Task<UploadModel> CreateUploadAsync(string originalFileName, string publicFilePath, string fileExtension, int fileSizeKb, int createdBy)
-        {
-            if (string.IsNullOrWhiteSpace(originalFileName)) throw new ArgumentException("Tên file không hợp lệ", nameof(originalFileName));
-            if (string.IsNullOrWhiteSpace(publicFilePath)) throw new ArgumentException("Đường dẫn public không hợp lệ", nameof(publicFilePath));
-            if (string.IsNullOrWhiteSpace(fileExtension)) fileExtension = ".dat";
-
-            var model = new UploadModel
-            {
-                FileName = originalFileName,
-                FilePath = publicFilePath,
-                FileExtension = fileExtension,
-                FileSizeKB = fileSizeKb,
-                Status = 1,
-                CreateAt = DateTime.UtcNow,
-                CreateBy = createdBy
-            };
-
-            var entity = new Upload
-            {
-                FileName = model.FileName,
-                FilePath = model.FilePath,
-                FileExtension = model.FileExtension,
-                FileSizeKB = model.FileSizeKB,
-                Status = model.Status,
-                CreateAt = model.CreateAt,
-                CreateBy = model.CreateBy
-            };
-            _db.Uploads.Add(entity);
-            await _db.SaveChangesAsync();
-            model.Id = entity.Id;
-            return model;
+            var relative = $"{now.Year}/{now.Month:D2}/{now.Day:D2}";
+            var finalPath = $"{basePath.TrimEnd('/')}/{relative}";
+            Directory.CreateDirectory(GetPhysicalPath(finalPath));
+            return finalPath;
         }
     }
 }

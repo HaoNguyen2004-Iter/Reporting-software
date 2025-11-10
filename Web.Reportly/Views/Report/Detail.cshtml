@@ -3,9 +3,9 @@
     ViewData["Title"] = "Chi tiết báo cáo";
 }
 
-<div classs="row">
+<div class="row">
     <div class="col-lg-10 mx-auto">
-        
+
         <div class="mb-3">
             <a asp-action="History" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left me-1"></i> Quay lại Lịch sử
@@ -16,12 +16,11 @@
             <div class="card-header bg-light">
                 <h4 class="mb-0">@(Model.Subject)</h4>
                 <p class="mb-0 text-muted">
-                    Gửi lúc: @Model.CreatedAt?.ToString("dd/MM/yyyy HH:mm")
+                    Gửi lúc: @Model.CreatedAt.ToString("dd/MM/yyyy HH:mm")
                 </p>
             </div>
             <div class="card-body">
-                
-                <!--Hiển thị thông tin Người gửi và Phòng ban -->
+
                 <div class="row mb-4">
                     <div class="col-md-6">
                         <strong>Người gửi:</strong>
@@ -43,22 +42,29 @@
 
                 <hr class="my-4">
 
-                <!-- File đính kèm -->
-                <div class="mb-4">
-                    <h5 class="mb-3">File đính kèm</h5>
-                    <a href="@Model.FilePath" 
-                       class="btn btn-primary" 
-                       download="@Model.OriginalFileName">
-                        <i class="fas fa-download me-2"></i> Tải về: @(Model.OriginalFileName ?? System.IO.Path.GetFileName(Model.FilePath))
-                    </a>
-                </div>
+                @if (Model.Upload != null)
+                {
+                    <div class="mb-4">
+                        <h5 class="mb-3">File đính kèm</h5>
+                        <a href="@Model.Upload.FilePath"
+                           class="btn btn-primary"
+                           download="@Model.Upload.FileName">
+                            <i class="fas fa-download me-2"></i> Tải về: @Model.Upload.FileName
+                        </a>
+                    </div>
+                }
+                else
+                {
+                     <div class="mb-4 text-muted">Running
+                        <em>Không có file đính kèm.</em>
+                    </div>
+                }
 
                 <hr class="my-4">
 
-                <!-- Nội dung Email -->
                 <div>
                     <h5 class="mb-3">Nội dung báo cáo đã gửi</h5>
-                    <div class="email-content p-3 bg-light rounded" style="border: 1px solid #e9ecef;">
+                    <div class="email-content p-3 bg-light rounded" style="border: 1px solid #e9ecef; min-height: 200px;">
                         @Html.Raw(Model.Content)
                     </div>
                 </div>

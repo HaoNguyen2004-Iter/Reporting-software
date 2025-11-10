@@ -10,7 +10,13 @@ namespace DBContext.Reportly.Entities
         public string FileExtension { get; set; } = null!;
         public int FileSizeKB { get; set; }
         public int Status { get; set; }
-        public DateTime? CreateAt { get; set; }
-        public int CreateBy { get; set; }
+      
+        public DateTime CreatedAt { get; set; }
+        public int CreatedBy { get; set; }
+        public Guid ViewToken { get; set; }
+        public string? CreatorFullName { get; set; }
+        public string? CreatorDepartment { get; set; }
+
+
     }
 }

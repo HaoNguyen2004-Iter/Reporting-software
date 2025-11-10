@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Service.Reportly.Executes.Emails;
 using Service.Reportly.Executes.Uploads;
 using Service.Reportly.Model;
-using System.Threading.Tasks;
 
 namespace Reportly.Controllers
 {
@@ -21,138 +20,68 @@ namespace Reportly.Controllers
             _logger = logger;
         }
 
+        // API Upload
         [HttpPost("upload-chunk")]
-        public async Task<IActionResult> UploadChunk([FromForm] string uploadId, 
-            [FromForm] string originalFileName,
-            [FromForm] int chunkIndex,
-            [FromForm] int totalChunks,
-            [FromForm] long totalSizeBytes,
-            IFormFile chunk)
+        public async Task<IActionResult> UploadChunk([FromForm] ChunkRequest request, IFormFile chunk)
         {
-            //  TÀI KHOẢN (UserId) ===
             var userId = HttpContext.Session.GetInt32("UserId");
-            if (!userId.HasValue || userId.Value == 0)
-            {
-                return Unauthorized(new { message = "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại." });
-            }
-            // ======================================
+            if (!userId.HasValue) return Unauthorized(new { message = "Hết phiên đăng nhập." });
 
             try
             {
-                if (chunk == null || chunk.Length == 0)
-                    return BadRequest(new { message = "Chunk không hợp lệ!" });
-
-                var chunkRequest = new ChunkRequest
-                {
-                    UploadId = uploadId,
-                    OriginalFileName = originalFileName,
-                    ChunkIndex = chunkIndex,
-                    TotalChunks = totalChunks,
-                    TotalSizeBytes = totalSizeBytes
-                };
+                if (chunk == null || chunk.Length == 0) return BadRequest(new { message = "Chunk trống." });
 
                 using var stream = chunk.OpenReadStream();
-                var result = await _uploadCommand.UploadChunkAsync(chunkRequest, stream);
+                var result = await _uploadCommand.UploadChunkAsync(request, stream);
 
                 if (result.Completed)
                 {
-                    _logger.LogInformation("Upload completed for UserId {UserId}", userId);
-                    return Ok(new 
-                    { 
-                        completed = true,
-                        uploadId = result.UploadId,
-                        file = result.File, // Trả về toàn bộ object file
-                        message = "Upload hoàn tất!"
-                    });
+                    // Nếu completed, file đã được lưu vào DB với CreatedBy = 0 (trong UploadCommand cũ).
+                    // Cần update lại CreatedBy đúng của user nếu muốn kỹ hơn.
+                    return Ok(new { completed = true, uploadId = result.UploadId, file = result.File });
                 }
 
-                return Ok(new 
-                { 
-                    completed = false,
-                    uploadId = result.UploadId,
-                    message = $"Đã nhận chunk {chunkIndex + 1}/{totalChunks}"
-                });
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogWarning(ex, "Validation error for UserId {UserId}: {Message}", userId, ex.Message);
-                return BadRequest(new { message = ex.Message });
+                return Ok(new { completed = false, uploadId = result.UploadId });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error uploading chunk for UserId {UserId}: {Message}", userId, ex.Message);
-                return StatusCode(500, new { message = $"Lỗi upload chunk: {ex.Message}" });
+                _logger.LogError(ex, "Chunk upload error");
+                return StatusCode(500, new { message = ex.Message });
             }
         }
 
-
         [HttpPost("send")]
-    public async Task<IActionResult> SendEmail([FromForm] EmailModels model)
+        public async Task<IActionResult> SendEmail([FromForm] EmailModels model)
         {
-           
-            //Kiểm tra UserId từ Session
             var userId = HttpContext.Session.GetInt32("UserId");
-            if (!userId.HasValue || userId.Value == 0)
-            {
-                return Unauthorized(new { message = "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại." });
-            }
-            
-            // Ghi đè CreatedBy bằng ID (int) từ Session (Bảo mật)
+            if (!userId.HasValue) return Unauthorized(new { message = "Hết phiên đăng nhập." });
+
+            // Lấy thông tin người gửi từ Session để đảm bảo chính xác
             model.CreatedBy = userId.Value;
-         
-            model.SenderName = HttpContext.Session.GetString("FullName") ?? "Không rõ";
-            model.SenderDepartment = HttpContext.Session.GetString("DepartmentName") ?? "Không rõ";
-            
-    
+            model.SenderName = HttpContext.Session.GetString("FullName");
+            model.SenderDepartment = HttpContext.Session.GetString("DepartmentName");
 
             try
             {
-                if (string.IsNullOrWhiteSpace(model.FilePath))
-                    return BadRequest(new { message = "Đường dẫn file không được để trống!" });
-
-                // Chuyển public path -> physical path
-                var publicPath = model.FilePath; // Lưu lại đường dẫn public
-                var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", model.FilePath.Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar));
-
-                if (!System.IO.File.Exists(physicalPath))
+                // Đã có UploadId 
+                if (model.UploadId.HasValue && model.UploadId.Value > 0)
                 {
-                    _logger.LogWarning("File not found at physical path: {Path}", physicalPath);
-                    return BadRequest(new { message = "File không tồn tại!" });
+                   // Chưa làm
+                }
+                // Có FilePath
+                else
+                {
+                     return BadRequest(new { message = "Vui lòng đính kèm file báo cáo (UploadId missing)." });
                 }
 
-                // Tạo bản ghi Upload trước (chỉ khi có file)
-                model.PublicFilePath = publicPath;
-                model.FilePath = physicalPath; // physical for sending
-
-                if (!string.IsNullOrWhiteSpace(publicPath))
-                {
-                    var fileSizeBytes = new FileInfo(physicalPath).Length;
-                    var fileSizeKb = (int)Math.Ceiling(fileSizeBytes / 1024.0);
-                    var ext = model.FileExtension ?? Path.GetExtension(model.OriginalFileName ?? physicalPath) ?? ".pdf";
-                    var upload = await _uploadCommand.CreateUploadAsync(model.OriginalFileName ?? "N/A", publicPath, ext, fileSizeKb, model.CreatedBy);
-                    model.UploadId = upload.Id;
-                    model.FileExtension = ext;
-                    model.FileSizeKB = fileSizeKb;
-                }
-
-                var success = await _emailCommand.SendAsync(model); 
-
-                return success
-                    ? Ok(new { message = "Gửi email thành công!" })
-                    : StatusCode(500, new { message = "Lỗi khi gửi mail!" });
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogWarning(ex, "Validation error for UserId {UserId}: {Message}", userId, ex.Message);
-                return BadRequest(new { message = ex.Message });
+                var success = await _emailCommand.SendAsync(model);
+                return success ? Ok(new { message = "Gửi email thành công!" })
+                               : StatusCode(500, new { message = "Gửi email thất bại." });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending email for UserId {UserId}: {Message}", userId, ex.Message);
-                var errorMessage = ex.InnerException != null 
-                    ? $"{ex.Message} | Chi tiết: {ex.InnerException.Message}"
-                    : ex.Message;
-                return StatusCode(500, new { message = $"Lỗi: {errorMessage}" });
+                _logger.LogError(ex, "Send email error");
+                return StatusCode(500, new { message = ex.Message });
             }
         }
     }

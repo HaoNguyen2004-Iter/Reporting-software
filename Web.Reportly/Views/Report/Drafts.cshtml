@@ -1,0 +1,56 @@
+@model IEnumerable<DBContext.Reportly.Entities.Upload>
+@{
+    ViewData["Title"] = "Quản lý bản nháp";
+}
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5><i class="fas fa-clipboard-list me-2"></i>Danh sách báo cáo nháp</h5>
+        </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Báo cáo</th>
+                        <th>Thời gian tạo</th>
+                        <th class="text-end">Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr><td colspan="3" class="text-center py-4 text-muted">Chưa có bản nháp nào.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var item in Model)
+                        {
+                            <tr id="draft-@item.Id">
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-file-pdf text-danger fa-2x me-3"></i>
+                                        <div>
+                                            <strong>@item.FileName</strong>
+                                            <br/><small class="text-muted">#@item.Id - @item.FileSizeKB KB</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>@item.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-end">
+                                    <a href="/Report/View/@item.Id" class="btn btn-sm btn-outline-primary me-1" title="Xem chi tiết">
+                                        <i class="fas fa-info-circle"></i>
+                                    </a>
+                                    <a href="/Report/Submit?draftId=@item.Id" class="btn btn-sm btn-success">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </a>
+                                    </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+

@@ -8,7 +8,7 @@ namespace Web.Reportly.Controllers
     {
         private readonly IHttpClientFactory _httpFactory;
         // private const string AuthServerUrl = "http://192.168.1.86:5000";
-        private const string AuthServerUrl = "http://192.168.1.16:5000";
+        private const string AuthServerUrl = "http://10.40.77.154:5000";
 
         public AccountController(IHttpClientFactory httpFactory)
         {

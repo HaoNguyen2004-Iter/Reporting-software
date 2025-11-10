@@ -1,6 +1,4 @@
-// ===== MAIN.JS - Xử lý chung cho toàn bộ website =====
 
-// ===== KHỞI TẠO KHI DOCUMENT READY =====
 $(function() {
   
   // Khôi phục trạng thái sidebar
@@ -476,7 +474,7 @@ function isValidPhone(phone) {
 }
 
 /**
- * Debounce function
+ * Debounce function 
  */
 function debounce(func, wait) {
   var timeout;
@@ -492,25 +490,8 @@ function debounce(func, wait) {
   };
 }
 
-/**
- * Throttle function
- */
-function throttle(func, limit) {
-  var inThrottle;
-  return function() {
-    var args = arguments;
-    var context = this;
-    if (!inThrottle) {
-      func.apply(context, args);
-      inThrottle = true;
-      setTimeout(function() {
-        inThrottle = false;
-      }, limit);
-    }
-  };
-}
 
-// ===== EXPORT FUNCTIONS (nếu cần) =====
+// ===== EXPORT FUNCTIONS=====
 window.AppUtils = {
   toggleSidebar: toggleSidebar,
   showToast: showToast,
@@ -524,5 +505,5 @@ window.AppUtils = {
   isValidEmail: isValidEmail,
   isValidPhone: isValidPhone,
   debounce: debounce,
-  throttle: throttle
+
 };

@@ -6,9 +6,11 @@ using FluentEmail.Razor;
 using MailKit.Security;
 using Service.Reportly.Executes.Emails;
 using Service.Reportly.Executes.Uploads;
+using Service.Reportly.Executes.Reports;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseUrls("http://0.0.0.0:5005", "https://0.0.0.0:5006");
 
 // Add services
 builder.Services.AddRazorPages();
@@ -17,10 +19,18 @@ builder.Services.AddControllersWithViews();
 // Đăng ký Email & Upload Services
 builder.Services.AddScoped<EmailCommand>();
 builder.Services.AddScoped<UploadCommand>();
+builder.Services.AddScoped<ReportCommand>();
+builder.Services.AddScoped<ReportOne>();
+builder.Services.AddScoped<ReportMany>();
 
+builder.Services.AddHttpContextAccessor();
 // Database Context
 builder.Services.AddDbContext<AppDBContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")
+
+    )
+);
 
 // SMTP Config
 var smtpHost = builder.Configuration["Email:Smtp:Host"];
